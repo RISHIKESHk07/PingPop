@@ -1,0 +1,8 @@
+[
+{
+  "directory": "/home/intelliagent-19/Desktop/CPP_DEV_PROJECTS/pingPop/build",
+  "command": "/usr/bin/c++  -I/home/intelliagent-19/Desktop/CPP_DEV_PROJECTS/pingPop/headers -std=gnu++17 -o CMakeFiles/game.dir/src/game.cpp.o -c /home/intelliagent-19/Desktop/CPP_DEV_PROJECTS/pingPop/src/game.cpp",
+  "file": "/home/intelliagent-19/Desktop/CPP_DEV_PROJECTS/pingPop/src/game.cpp",
+  "output": "CMakeFiles/game.dir/src/game.cpp.o"
+}
+]

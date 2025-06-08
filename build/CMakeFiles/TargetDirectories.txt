@@ -1,0 +1,3 @@
+/home/intelliagent-19/Desktop/CPP_DEV_PROJECTS/pingPop/build/CMakeFiles/game.dir
+/home/intelliagent-19/Desktop/CPP_DEV_PROJECTS/pingPop/build/CMakeFiles/edit_cache.dir
+/home/intelliagent-19/Desktop/CPP_DEV_PROJECTS/pingPop/build/CMakeFiles/rebuild_cache.dir
