@@ -27,20 +27,24 @@
 #include <SFML/Window/WindowStyle.hpp>
 #include <assert.h>
 #include <cmath>
+#include <cstdlib>
 #include <iostream>
+#include <set>
 // UTILITY & INTIAL
 struct Bullet {
   sf::CircleShape b;
-  int type;
+  std::string owner;
+  int type = 0;
   float damage;
   sf::Vector2f position;
   sf::Vector2f velocity;
   sf::Vector2f direction;
-  float speed_constant = 2.f;
+  float speed_constant = 10.f;
   float blastRadius = 2.5f;
-  int bounceCount = 2;
-  Bullet(sf::Vector2f pos, int type, sf::Vector2f dir = {1.f, 1.f})
-      : position(pos), direction(dir) {
+  int bounceCount = 4;
+  Bullet(sf::Vector2f pos, int type, sf::Vector2f dir = {1.f, 1.f},
+         std::string name = "p2")
+      : position(pos), direction(dir), owner(name) {
     damage = 5.f;
     b.setRadius(10.f);
     b.setOrigin(5.f, 5.f);
@@ -49,15 +53,26 @@ struct Bullet {
     float len =
         std::sqrt(direction.x * direction.x + direction.y * direction.y);
     if (len != 0)
-      direction /= len; // velocity here now represents direction
+      direction /= len;
     velocity = direction * speed_constant;
     // 1: fast bullet , 2:higher damage bullet , 3:higher blast radius
     switch (type) {
     case 1:
+      std::cout << 1 << std::endl;
+      velocity = velocity * 2.f;
+      bounceCount += 2;
       break;
     case 2:
+      std::cout << 2 << std::endl;
+      damage *= 5;
+      bounceCount += 1;
       break;
     case 3:
+      std::cout << 3 << std::endl;
+      // use the blast radius part in the collison part as it will be blast
+      bounceCount += 0;
+      break;
+    default:
       break;
     }
   }
@@ -67,10 +82,14 @@ struct Bullet {
         position + velocity * dt.asSeconds() * speed_constant;
 
     if (nextPosition.x <= 64 || nextPosition.x >= ENDX) {
+      int randomint = std::rand() % 3;
+      type = randomint;
       velocity.x = -velocity.x;
       bounceCount--;
     }
     if (nextPosition.y <= 64 || nextPosition.y >= ENDY) {
+      int randomint2 = std::rand() % 3;
+      type = randomint2;
       velocity.y = -velocity.y;
       bounceCount--;
     }
@@ -82,7 +101,8 @@ struct Bullet {
 
 class Player {
 public:
-  Player(sf::RenderWindow &win) : contextwindow(win) {
+  Player(sf::RenderWindow &win, std::string name)
+      : contextwindow(win), name(name) {
     sf::Vector2u windowSize = win.getSize();
     unsigned int width = windowSize.x;
     unsigned int height = windowSize.y;
@@ -96,7 +116,7 @@ public:
   void update(sf::Time deltatime) {
     const float R = 70;
     const float speed = 200.f;   // pixels per second
-    const float coolDown = 0.3f; // seconds
+    const float coolDown = 0.7f; // seconds
     float ENDX = contextwindow.getSize().x - R;
     float ENDY = contextwindow.getSize().y - R;
 
@@ -123,7 +143,7 @@ public:
     if ((sf::Keyboard::isKeyPressed(sf::Keyboard::A) ||
          sf::Mouse::isButtonPressed(sf::Mouse::Left)) &&
         shootclock.getElapsedTime().asSeconds() > coolDown) {
-      bullets.push_back(Bullet(position, 1, dir));
+      bullets.push_back(Bullet(position, 1, dir, this->name));
       shootclock.restart();
     }
 
@@ -136,15 +156,119 @@ public:
       bi.updatemovement(dt, ENDX, ENDY);
     }
   }
+  static void collisionBtwForeignEntites(std::vector<Player *> &players) {
+    // remember i need to run the clear with bounce factor ....
+    for (int i = 0; i < players.size(); i++) {
+      for (int j = 0; j < players.size(); j++) {
+
+        auto &bulletsI = players[i]->bullets;
+        auto &bulletsJ = players[j]->bullets;
+
+        if (i == j) {
+          // Bullet-bullet collision within same player
+          for (int x = bulletsI.size() - 1; x >= 0; --x) {
+            for (int y = x - 1; y >= 0; --y) {
+              auto posX = bulletsI[x].b.getPosition();
+              auto posY = bulletsI[y].b.getPosition();
+
+              float dx = posX.x - posY.x;
+              float dy = posX.y - posY.y;
+              float dist = std::sqrt(dx * dx + dy * dy);
+
+              if (dist <=
+                  bulletsI[x].b.getRadius() + bulletsI[y].b.getRadius()) {
+                bulletsI[x].velocity = -bulletsI[x].velocity;
+                bulletsI[y].velocity = -bulletsI[y].velocity;
+                bulletsI[x].bounceCount--;
+                bulletsI[y].bounceCount--;
+                break;
+              }
+            }
+          }
+          continue;
+        }
+
+        // For i ≠ j: bullets of different players
+        sf::Vector2f playerIposition = players[i]->position;
+
+        for (int i1 = bulletsI.size() - 1; i1 >= 0; --i1) {
+          for (int j1 = bulletsJ.size() - 1; j1 >= 0; --j1) {
+            sf::Vector2f posI = bulletsI[i1].b.getPosition();
+            sf::Vector2f posJ = bulletsJ[j1].b.getPosition();
+
+            float dx = posI.x - posJ.x;
+            float dy = posI.y - posJ.y;
+            float distance = std::sqrt(dx * dx + dy * dy);
+
+            float ex = playerIposition.x - posJ.x;
+            float ey = playerIposition.y - posJ.y;
+            float playerBulletDistance = std::sqrt(ex * ex + ey * ey);
+
+            // Bullet-Bullet collision
+            if (distance <=
+                bulletsI[i1].b.getRadius() + bulletsJ[j1].b.getRadius()) {
+              bulletsI.erase(bulletsI.begin() + i1);
+              bulletsJ.erase(bulletsJ.begin() + j1);
+              break;
+            }
+
+            // Enemy bullet hits player
+            if (playerBulletDistance <= 10 + bulletsJ[j1].b.getRadius()) {
+
+              if (bulletsJ[j1].type == 3) {
+                float blastRadius = bulletsJ[j1].blastRadius;
+
+                sf::Vector2f blastCenter = bulletsJ[j1].b.getPosition();
+
+                // Apply Blat radius damage to players within the blast radius
+                for (auto ps : players) {
+                  float dx = ps->position.x - blastCenter.x;
+                  float dy = ps->position.y - blastCenter.y;
+                  float distSquared = dx * dx + dy * dy;
+
+                  if (distSquared <= blastRadius * blastRadius) {
+                    ps->health -= bulletsJ[j1].damage;
+                  }
+                }
+              }
+
+              players[i]->health -= bulletsJ[j1].damage;
+              bulletsJ.erase(bulletsJ.begin() + j1);
+              break;
+            }
+          }
+        }
+      }
+    }
+    for (auto allP : players) {
+      for (int bulletsperP = allP->bullets.size() - 1; bulletsperP >= 0;
+           bulletsperP--) {
+        if (allP->bullets[bulletsperP].bounceCount == 0) {
+          allP->bullets.erase(allP->bullets.begin() + bulletsperP);
+        }
+      }
+    }
+  }
   void renderBullets() {
     for (auto bu : bullets) {
+      if (bu.type == 1)
+        bu.b.setFillColor(sf::Color::Cyan);
+      if (bu.type == 2)
+        bu.b.setFillColor(sf::Color::Green);
+      if (bu.type == 3)
+        bu.b.setFillColor(sf::Color::Magenta);
+
       contextwindow.draw(bu.b);
     }
   }
   void render() {
     sf::CircleShape p1(10);
     p1.setPosition(position.x, position.y);
-
+    if (this->name == "p1") {
+      p1.setFillColor(sf::Color::Yellow);
+    } else {
+      p1.setFillColor(sf::Color::Blue);
+    }
     sf::RectangleShape line(sf::Vector2f(40.f, 10.f));
     float lengthDir = std::sqrt(dir.x * dir.x + dir.y * dir.y);
     if (lengthDir != 0)
@@ -167,6 +291,7 @@ public:
   }
 
 private:
+  std::string name;
   sf::Vector2f position;
   float health;
   sf::Vector2f dir;
@@ -276,7 +401,13 @@ int main() {
   unsigned int width = windowSize.x;
   unsigned int height = windowSize.y;
   window.setPosition(sf::Vector2i(500, 500));
-  Player *p1 = new Player(window);
+
+  std::vector<Player *> players;
+  Player *p1 = new Player(window, "p1");
+  Player *p2 = new Player(window, "p2");
+  p2->setintialPosition(sf::Vector2f{85.f, 85.f});
+  players.push_back(p1);
+  players.push_back(p2);
   GameTile tilemap;
   sf::Clock clock;
 
@@ -302,15 +433,17 @@ int main() {
         window.close();
     }
 
-    p1->update(elapsed1);
-
+    players[0]->update(elapsed1);
+    players[1]->update(elapsed1);
+    Player::collisionBtwForeignEntites(players);
     // updation of rendering occurs , remember we use double buffering so do
     // not use anyother strategy to draw stuff besides below clear , draw ,
     // display
     window.clear();
     // draw stuff over here
     window.draw(tilemap);
-    p1->render();
+    players[0]->render();
+    players[1]->render();
     window.display();
   }
 
